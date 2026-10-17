@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>FinTrack Mobile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-24 select-none">
+
+  <!-- TOP APP BAR (Sticky & Compact) -->
+  <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-md mx-auto px-3 py-2.5 flex items-center justify-between">
+      <!-- Brand Icon -->
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
+          <i data-lucide="wallet" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+        <span class="font-bold text-sm tracking-tight">FinTrack</span>
+      </div>
+
+      <!-- Month-Year Time Selector -->
+      <div class="flex items-center bg-slate-800 rounded-xl border border-slate-700 px-1 py-0.5">
+        <button onclick="shiftMonth(-1)" class="p-1.5 text-slate-300 active:scale-90 transition">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <input type="month" id="period-picker" onchange="changePeriod(this.value)"
+          class="bg-transparent text-xs font-bold text-center text-white focus:outline-none w-28 cursor-pointer">
+        <button onclick="shiftMonth(1)" class="p-1.5 text-slate-300 active:scale-90 transition">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Backup / Restore Icons -->
+      <div class="flex items-center gap-1">
+        <button onclick="exportData()" class="p-2 text-slate-300 hover:text-white active:scale-90" title="Backup">
+          <i data-lucide="download" class="w-4 h-4"></i>
+        </button>
+        <label class="p-2 text-slate-300 hover:text-white active:scale-90 cursor-pointer" title="Restore">
+          <i data-lucide="upload" class="w-4 h-4"></i>
+          <input type="file" accept=".json" class="hidden" onchange="importData(event)">
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER (Mobile Container Width) -->
+  <main class="max-w-md mx-auto px-3 pt-3 space-y-3">
+
+    <!-- OVERBUDGET WARNING PILL -->
+    <div id="overbudget-pill" class="hidden bg-rose-600 text-white px-3 py-2 rounded-xl shadow-sm flex items-center justify-between text-xs animate-pulse">
+      <div class="flex items-center gap-2">
+        <i data-lucide="flame" class="w-4 h-4 shrink-0"></i>
+        <span id="overbudget-msg" class="font-semibold">Outflow crosses income!</span>
+      </div>
+      <button onclick="switchTab('charts')" class="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold">Charts</button>
+    </div>
+
+    <!-- COMPACT KPI STRIP (4 Mini Cards) -->
+    <section class="grid grid-cols-4 gap-1.5 text-center">
+      <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-200/80">
+        <div class="flex justify-center text-emerald-500 mb-0.5"><i data-lucide="arrow-down-left" class="w-3.5 h-3.5"></i></div>
+        <p class="text-[10px] text-slate-400 font-medium">Income</p>
+        <p id="kpi-inc" class="text-xs font-bold text-emerald-600 truncate">₹0</p>
+      </div>
+      <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-200/80">
+        <div class="flex justify-center text-rose-500 mb-0.5"><i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i></div>
+        <p class="text-[10px] text-slate-400 font-medium">Spent+Bills</p>
+        <p id="kpi-out" class="text-xs font-bold text-rose-600 truncate">₹0</p>
+      </div>
+      <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-200/80">
+        <div class="flex justify-center text-indigo-500 mb-0.5"><i data-lucide="piggy-bank" class="w-3.5 h-3.5"></i></div>
+        <p class="text-[10px] text-slate-400 font-medium">RD Saved</p>
+        <p id="kpi-rd" class="text-xs font-bold text-indigo-600 truncate">₹0</p>
+      </div>
+      <div class="bg-white p-2 rounded-xl shadow-sm border border-slate-200/80">
+        <div class="flex justify-center text-slate-600 mb-0.5"><i data-lucide="scale" class="w-3.5 h-3.5"></i></div>
+        <p class="text-[10px] text-slate-400 font-medium">Net Left</p>
+        <p id="kpi-net" class="text-xs font-bold text-slate-900 truncate">₹0</p>
+      </div>
+    </section>
+
+    <!-- TAB 1: CASHFLOW (Income & Daily Expenses) -->
+    <section id="tab-flow" class="tab-panel space-y-3">
+      <!-- Sub-toggle: Expenses vs Income -->
+      <div class="bg-slate-200/80 p-1 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
+        <button onclick="setFlowView('exp')" id="flow-btn-exp" class="py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5">
+          <i data-lucide="receipt" class="w-3.5 h-3.5 text-rose-500"></i> Expenses
+        </button>
+        <button onclick="setFlowView('inc')" id="flow-btn-inc" class="py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5">
+          <i data-lucide="banknote" class="w-3.5 h-3.5 text-emerald-500"></i> Income
+        </button>
+      </div>
+
+      <div id="flow-exp-list" class="space-y-2"></div>
+      <div id="flow-inc-list" class="hidden space-y-2"></div>
+    </section>
+
+    <!-- TAB 2: SCHEDULED BILLS & EMIs (1m, 3m, 6m, 12m) -->
+    <section id="tab-bills" class="tab-panel hidden space-y-3">
+      <div class="bg-slate-200/80 p-1 rounded-xl grid grid-cols-2 gap-1 text-xs font-semibold">
+        <button onclick="setBillView('due')" id="bill-btn-due" class="py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5">
+          <i data-lucide="bell-ring" class="w-3.5 h-3.5 text-amber-500"></i> Due Now
+        </button>
+        <button onclick="setBillView('all')" id="bill-btn-all" class="py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5">
+          <i data-lucide="repeat" class="w-3.5 h-3.5 text-slate-600"></i> All Rules
+        </button>
+      </div>
+
+      <div id="bills-due-list" class="space-y-2"></div>
+      <div id="bills-all-list" class="hidden space-y-2"></div>
+    </section>
+
+    <!-- TAB 3: RD SINKING FUNDS (Save Early for Yearly Bills) -->
+    <section id="tab-rds" class="tab-panel hidden space-y-2.5">
+      <div id="rd-cards-list" class="space-y-2.5"></div>
+    </section>
+
+    <!-- TAB 4: VISUAL CHARTS (3 Sub-Tabs) -->
+    <section id="tab-charts" class="tab-panel hidden space-y-3">
+      <!-- Chart Type Pill Selector -->
+      <div class="bg-slate-200/80 p-1 rounded-xl grid grid-cols-3 gap-1 text-[11px] font-semibold">
+        <button onclick="switchChart('ratio')" id="chart-btn-ratio" class="py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1">
+          <i data-lucide="gauge" class="w-3.5 h-3.5 text-emerald-500"></i> Inc vs Exp
+        </button>
+        <button onclick="switchChart('year')" id="chart-btn-year" class="py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-500"></i> Year Trend
+        </button>
+        <button onclick="switchChart('cat')" id="chart-btn-cat" class="py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1">
+          <i data-lucide="pie-chart" class="w-3.5 h-3.5 text-rose-500"></i> Categories
+        </button>
+      </div>
+
+      <!-- Chart 1: Monthly Income vs Outflow & Savings Gauge -->
+      <div id="chart-box-ratio" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-700">Monthly Cashflow Split</span>
+          <span id="ratio-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold"></span>
+        </div>
+        <div class="h-56 relative">
+          <canvas id="ratioChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: 12-Month Yearly Bar Chart -->
+      <div id="chart-box-year" class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-700">12-Month Cashflow (<span id="year-lbl"></span>)</span>
+          <span class="text-[10px] text-slate-400">Auto-includes 6m/12m bills</span>
+        </div>
+        <div class="h-64 relative">
+          <canvas id="yearChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: Category Doughnut -->
+      <div id="chart-box-cat" class="hidden bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-2">
+        <span class="font-bold text-xs text-slate-700">Expense Categories</span>
+        <div class="h-56 relative">
+          <canvas id="catChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FLOATING ACTION BUTTON (+) -->
+  <button onclick="openModal()" class="fixed right-4 bottom-20 z-30 w-13 h-13 p-3.5 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-900/30 active:scale-90 transition flex items-center justify-center">
+    <i data-lucide="plus" class="w-6 h-6"></i>
+  </button>
+
+  <!-- SLIDE-UP ADD MODAL (Bottom Sheet) -->
+  <div id="add-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 hidden flex items-end justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-4 shadow-2xl animate-slide-up">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-2.5">
+        <span class="font-bold text-sm text-slate-800">Quick Add</span>
+        <button onclick="closeModal()" class="p-1 text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Type Selector -->
+      <div class="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl text-[11px] font-semibold">
+        <button onclick="setModalType('exp')" id="mbtn-exp" class="py-1.5 rounded-lg bg-white shadow-xs text-rose-600">Expense</button>
+        <button onclick="setModalType('inc')" id="mbtn-inc" class="py-1.5 rounded-lg text-slate-500">Income</button>
+        <button onclick="setModalType('bill')" id="mbtn-bill" class="py-1.5 rounded-lg text-slate-500">Bill/EMI</button>
+        <button onclick="setModalType('rd')" id="mbtn-rd" class="py-1.5 rounded-lg text-slate-500">RD Goal</button>
+      </div>
+
+      <!-- 1. Add Expense Form -->
+      <form id="form-exp" class="space-y-3">
+        <input type="text" id="exp-title" placeholder="Expense item (e.g., Groceries, Fuel)" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <div class="grid grid-cols-2 gap-2">
+          <input type="number" id="exp-amt" placeholder="Amount (₹)" min="1" step="any" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+          <select id="exp-cat" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white">
+            <option value="Food">🍔 Food</option>
+            <option value="Transport">⛽ Transport</option>
+            <option value="Shopping">🛍️ Shopping</option>
+            <option value="Utilities">⚡ Utilities</option>
+            <option value="Health">💊 Health</option>
+            <option value="Other">📦 Other</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-rose-600 text-white font-semibold py-2.5 rounded-xl text-sm">Save Expense</button>
+      </form>
+
+      <!-- 2. Add Income Form (Supports Auto-Monthly Salary) -->
+      <form id="form-inc" class="hidden space-y-3">
+        <input type="text" id="inc-title" placeholder="Source (e.g., Salary, Rent)" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <input type="number" id="inc-amt" placeholder="Amount (₹)" min="1" step="any" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <label class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <input type="checkbox" id="inc-recur" checked class="w-4 h-4 accent-emerald-600 rounded">
+          <span>Auto-repeat every month onwards</span>
+        </label>
+        <button type="submit" class="w-full bg-emerald-600 text-white font-semibold py-2.5 rounded-xl text-sm">Save Income</button>
+      </form>
+
+      <!-- 3. Add Auto-Recurring Bill / EMI Form -->
+      <form id="form-bill" class="hidden space-y-3">
+        <input type="text" id="bill-name" placeholder="Bill / EMI (e.g., Home EMI, Insurance)" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <div class="grid grid-cols-2 gap-2">
+          <input type="number" id="bill-amt" placeholder="Amount (₹)" min="1" step="any" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+          <select id="bill-freq" class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white">
+            <option value="1">Every Month (1m)</option>
+            <option value="3">Quarterly (3m)</option>
+            <option value="6">Twice a Year (6m)</option>
+            <option value="12">Yearly (12m)</option>
+          </select>
+        </div>
+        <div class="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          <span class="text-slate-500">First Due Month:</span>
+          <input type="month" id="bill-start" required class="bg-transparent font-semibold text-slate-800 focus:outline-none">
+        </div>
+        <button type="submit" class="w-full bg-amber-600 text-white font-semibold py-2.5 rounded-xl text-sm">Schedule Auto-Bill</button>
+      </form>
+
+      <!-- 4. Add RD Sinking Fund for Yearly Expenses -->
+      <form id="form-rd" class="hidden space-y-3">
+        <input type="text" id="rd-name" placeholder="Goal for Yearly Bill (e.g., School Fee, Tax)" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <input type="number" id="rd-target" placeholder="Target Payable Amount (₹)" min="1" step="any" required class="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200">
+        <div class="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs">
+          <span class="text-slate-500">Payout Month:</span>
+          <input type="month" id="rd-due" required class="bg-transparent font-semibold text-slate-800 focus:outline-none">
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2.5 rounded-xl text-sm">Create RD Plan</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAVIGATION BAR (Icon-First Mobile Navigation) -->
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-30">
+    <div class="max-w-md mx-auto grid grid-cols-4 py-1.5">
+      <button onclick="switchTab('flow')" id="nav-flow" class="nav-btn flex flex-col items-center py-1 text-emerald-600">
+        <i data-lucide="wallet-cards" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold mt-0.5">Cashflow</span>
+      </button>
+      <button onclick="switchTab('bills')" id="nav-bills" class="nav-btn flex flex-col items-center py-1 text-slate-400 relative">
+        <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+        <span class="text-[10px] font-semibold mt-0.5">Schedule</span>
+        <span id="unpaid-badge" class="hidden absolute top-0.5 right-6 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">0</span>
+      </button>
+      <button onclick="switchTab('rds')" id="nav-rds" class="nav-btn flex flex-col items-center py-1 text-slate-400">
+        <i data-lucide="piggy-bank" class="w-5 h-5"></i>
+        <span class="text-[10px] font-semibold mt-0.5">RD Goals</span>
+      </button>
+      <button onclick="switchTab('charts')" id="nav-charts" class="nav-btn flex flex-col items-center py-1 text-slate-400">
+        <i data-lucide="pie-chart" class="w-5 h-5"></i>
+        <span class="text-[10px] font-semibold mt-0.5">Charts</span>
+      </button>
+    </div>
+  </nav>
+
+  <script>
+    const now = new Date();
+    let currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let activeTab = 'flow';
+    let activeChart = 'ratio';
+
+    let state = JSON.parse(localStorage.getItem('fintrack_mobile_v3')) || {
+      incomes: [],   // { id, title, amount, period, recurring: true/false }
+      expenses: [],  // { id, title, amount, category, period, date }
+      bills: [],     // { id, name, amount, freq: 1|3|6|12, startPeriod, paidPeriods: [] }
+      rds: []        // { id, name, target, duePeriod, deposits: { 'YYYY-MM': amt }, settled: false }
+    };
+
+    let ratioChartInst = null, yearChartInst = null, catChartInst = null;
+
+    function save() {
+      localStorage.setItem('fintrack_mobile_v3', JSON.stringify(state));
+      render();
+    }
+
+    function fmt(n) {
+      const val = Math.round(Number(n) || 0);
+      return (val < 0 ? '-₹' : '₹') + Math.abs(val).toLocaleString('en-IN');
+    }
+
+    function monthDiff(startYM, targetYM) {
+      const [sY, sM] = startYM.split('-').map(Number);
+      const [tY, tM] = targetYM.split('-').map(Number);
+      return (tY - sY) * 12 + (tM - sM);
+    }
+
+    function isBillDue(bill, ym) {
+      const diff = monthDiff(bill.startPeriod, ym);
+      return diff >= 0 && (diff % bill.freq === 0);
+    }
+
+    function isIncomeActive(inc, ym) {
+      if (inc.recurring) return monthDiff(inc.period, ym) >= 0;
+      return inc.period === ym;
+    }
+
+    function getSummary(ym) {
+      const incList = state.incomes.filter(i => isIncomeActive(i, ym));
+      const expList = state.expenses.filter(e => e.period === ym);
+      const dueBills = state.bills.filter(b => isBillDue(b, ym));
+
+      const inc = incList.reduce((s, x) => s + x.amount, 0);
+      const exp = expList.reduce((s, x) => s + x.amount, 0);
+      const billsAmt = dueBills.reduce((s, x) => s + x.amount, 0);
+      const unpaidCount = dueBills.filter(b => !b.paidPeriods.includes(ym)).length;
+      const rdDep = state.rds.reduce((s, r) => s + (r.deposits[ym] || 0), 0);
+
+      const totalOut = exp + billsAmt;
+      const net = inc - totalOut - rdDep;
+      return { incList, expList, dueBills, inc, exp, billsAmt, unpaidCount, rdDep, totalOut, net };
+    }
+
+    // Period & Navigation
+    function changePeriod(val) {
+      if (val) { currentPeriod = val; render(); }
+    }
+
+    function shiftMonth(delta) {
+      const [y, m] = currentPeriod.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      currentPeriod = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      render();
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        b.classList.remove('text-emerald-600');
+        b.classList.add('text-slate-400');
+      });
+      const activeNav = document.getElementById(`nav-${tab}`);
+      activeNav.classList.remove('text-slate-400');
+      activeNav.classList.add('text-emerald-600');
+
+      if (tab === 'charts') renderCharts();
+    }
+
+    function setFlowView(v) {
+      document.getElementById('flow-exp-list').classList.toggle('hidden', v !== 'exp');
+      document.getElementById('flow-inc-list').classList.toggle('hidden', v !== 'inc');
+      document.getElementById('flow-btn-exp').className = v === 'exp'
+        ? 'py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5'
+        : 'py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5';
+      document.getElementById('flow-btn-inc').className = v === 'inc'
+        ? 'py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5'
+        : 'py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5';
+    }
+
+    function setBillView(v) {
+      document.getElementById('bills-due-list').classList.toggle('hidden', v !== 'due');
+      document.getElementById('bills-all-list').classList.toggle('hidden', v !== 'all');
+      document.getElementById('bill-btn-due').className = v === 'due'
+        ? 'py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5'
+        : 'py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5';
+      document.getElementById('bill-btn-all').className = v === 'all'
+        ? 'py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1.5'
+        : 'py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1.5';
+    }
+
+    function switchChart(type) {
+      activeChart = type;
+      ['ratio', 'year', 'cat'].forEach(t => {
+        document.getElementById(`chart-box-${t}`).classList.toggle('hidden', t !== type);
+        document.getElementById(`chart-btn-${t}`).className = t === type
+          ? 'py-1.5 rounded-lg bg-white text-slate-900 shadow-sm flex items-center justify-center gap-1'
+          : 'py-1.5 rounded-lg text-slate-500 flex items-center justify-center gap-1';
+      });
+      renderCharts();
+    }
+
+    // Modal Controls
+    function openModal() {
+      document.getElementById('add-modal').classList.remove('hidden');
+      document.getElementById('bill-start').value = currentPeriod;
+      document.getElementById('rd-due').value = currentPeriod;
+      if (activeTab === 'bills') setModalType('bill');
+      else if (activeTab === 'rds') setModalType('rd');
+      else setModalType('exp');
+    }
+
+    function closeModal() {
+      document.getElementById('add-modal').classList.add('hidden');
+    }
+
+    function setModalType(t) {
+      ['exp', 'inc', 'bill', 'rd'].forEach(k => {
+        document.getElementById(`form-${k}`).classList.toggle('hidden', k !== t);
+        document.getElementById(`mbtn-${k}`).className = k === t
+          ? 'py-1.5 rounded-lg bg-white shadow-xs text-slate-900 font-bold'
+          : 'py-1.5 rounded-lg text-slate-500';
+      });
+    }
+
+    // Form Submissions
+    document.getElementById('form-exp').addEventListener('submit', e => {
+      e.preventDefault();
+      state.expenses.unshift({
+        id: Date.now(),
+        title: document.getElementById('exp-title').value.trim(),
+        amount: parseFloat(document.getElementById('exp-amt').value),
+        category: document.getElementById('exp-cat').value,
+        period: currentPeriod,
+        date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+      });
+      e.target.reset();
+      closeModal();
+      save();
+    });
+
+    document.getElementById('form-inc').addEventListener('submit', e => {
+      e.preventDefault();
+      state.incomes.unshift({
+        id: Date.now(),
+        title: document.getElementById('inc-title').value.trim(),
+        amount: parseFloat(document.getElementById('inc-amt').value),
+        period: currentPeriod,
+        recurring: document.getElementById('inc-recur').checked
+      });
+      e.target.reset();
+      closeModal();
+      setFlowView('inc');
+      save();
+    });
+
+    document.getElementById('form-bill').addEventListener('submit', e => {
+      e.preventDefault();
+      state.bills.push({
+        id: Date.now(),
+        name: document.getElementById('bill-name').value.trim(),
+        amount: parseFloat(document.getElementById('bill-amt').value),
+        freq: parseInt(document.getElementById('bill-freq').value),
+        startPeriod: document.getElementById('bill-start').value,
+        paidPeriods: []
+      });
+      e.target.reset();
+      closeModal();
+      switchTab('bills');
+      save();
+    });
+
+    document.getElementById('form-rd').addEventListener('submit', e => {
+      e.preventDefault();
+      state.rds.push({
+        id: Date.now(),
+        name: document.getElementById('rd-name').value.trim(),
+        target: parseFloat(document.getElementById('rd-target').value),
+        duePeriod: document.getElementById('rd-due').value,
+        deposits: {},
+        settled: false
+      });
+      e.target.reset();
+      closeModal();
+      switchTab('rds');
+      save();
+    });
+
+    // Item Actions
+    function delExp(id) { state.expenses = state.expenses.filter(x => x.id !== id); save(); }
+    function delInc(id) { state.incomes = state.incomes.filter(x => x.id !== id); save(); }
+    function delBill(id) { state.bills = state.bills.filter(x => x.id !== id); save(); }
+    function delRD(id) { state.rds = state.rds.filter(x => x.id !== id); save(); }
+
+    function toggleBillPaid(id) {
+      const b = state.bills.find(x => x.id === id);
+      if (!b) return;
+      const idx = b.paidPeriods.indexOf(currentPeriod);
+      if (idx > -1) b.paidPeriods.splice(idx, 1);
+      else b.paidPeriods.push(currentPeriod);
+      save();
+    }
+
+    function depositRD(id, amt) {
+      const r = state.rds.find(x => x.id === id);
+      if (!r) return;
+      r.deposits[currentPeriod] = (r.deposits[currentPeriod] || 0) + amt;
+      save();
+    }
+
+    function settleRD(id) {
+      const r = state.rds.find(x => x.id === id);
+      if (!r) return;
+      const saved = Object.values(r.deposits).reduce((a, b) => a + b, 0);
+      if (confirm(`Pay "${r.name}" using saved RD (${fmt(saved)})?`)) {
+        r.settled = true;
+        save();
+      }
+    }
+
+    // Render UI
+    function render() {
+      document.getElementById('period-picker').value = currentPeriod;
+      const s = getSummary(currentPeriod);
+
+      // KPI Strip
+      document.getElementById('kpi-inc').textContent = fmt(s.inc);
+      document.getElementById('kpi-out').textContent = fmt(s.totalOut);
+      document.getElementById('kpi-rd').textContent = fmt(s.rdDep);
+      const netEl = document.getElementById('kpi-net');
+      netEl.textContent = fmt(s.net);
+      netEl.className = `text-xs font-bold truncate ${s.net < 0 ? 'text-rose-600' : 'text-slate-900'}`;
+
+      // Unpaid Badge
+      const badge = document.getElementById('unpaid-badge');
+      badge.textContent = s.unpaidCount;
+      badge.classList.toggle('hidden', s.unpaidCount === 0);
+
+      // Overbudget Warning Pill
+      const pill = document.getElementById('overbudget-pill');
+      if (s.inc > 0 && s.net < 0) {
+        pill.classList.remove('hidden');
+        document.getElementById('overbudget-msg').textContent = `Outflow exceeds income by ${fmt(Math.abs(s.net))}!`;
+      } else {
+        pill.classList.add('hidden');
+      }
+
+      // Render Expenses
+      const catIcons = { Food: 'utensils', Transport: 'fuel', Shopping: 'shopping-bag', Utilities: 'zap', Health: 'heart-pulse', Other: 'box' };
+      document.getElementById('flow-exp-list').innerHTML = s.expList.length ? s.expList.map(e => `
+        <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-200/80 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center">
+              <i data-lucide="${catIcons[e.category] || 'receipt'}" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-800">${e.title}</p>
+              <p class="text-[10px] text-slate-400">${e.category} • ${e.date}</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-rose-600">${fmt(e.amount)}</span>
+            <button onclick="delExp(${e.id})" class="text-slate-300 hover:text-rose-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+        </div>
+      `).join('') : `<div class="text-center py-10 text-slate-400 text-xs">Tap <b>+</b> to log daily expenses</div>`;
+
+      // Render Income
+      document.getElementById('flow-inc-list').innerHTML = s.incList.length ? s.incList.map(i => `
+        <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-200/80 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <i data-lucide="banknote" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-800">${i.title}</p>
+              <span class="text-[10px] text-emerald-600 font-medium">${i.recurring ? '↻ Auto-Monthly' : 'One-time'}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-emerald-600">+${fmt(i.amount)}</span>
+            <button onclick="delInc(${i.id})" class="text-slate-300 hover:text-rose-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+        </div>
+      `).join('') : `<div class="text-center py-10 text-slate-400 text-xs">Tap <b>+</b> to add monthly income</div>`;
+
+      // Render Due Bills
+      const freqTag = { 1: '1m • Monthly', 3: '3m • Quarterly', 6: '6m • Twice/Yr', 12: '12m • Yearly' };
+      document.getElementById('bills-due-list').innerHTML = s.dueBills.length ? s.dueBills.map(b => {
+        const paid = b.paidPeriods.includes(currentPeriod);
+        return `
+          <div onclick="toggleBillPaid(${b.id})" class="bg-white p-3 rounded-xl shadow-xs border ${paid ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200'} flex items-center justify-between cursor-pointer">
+            <div class="flex items-center gap-2.5">
+              <div class="w-6 h-6 rounded-full ${paid ? 'bg-emerald-500 text-white' : 'border-2 border-amber-400'} flex items-center justify-center">
+                ${paid ? '<i data-lucide="check" class="w-3.5 h-3.5"></i>' : ''}
+              </div>
+              <div>
+                <p class="text-xs font-bold ${paid ? 'line-through text-slate-400' : 'text-slate-800'}">${b.name}</p>
+                <span class="text-[10px] text-slate-400">${freqTag[b.freq]}</span>
+              </div>
+            </div>
+            <span class="text-xs font-bold ${paid ? 'text-emerald-600' : 'text-amber-600'}">${fmt(b.amount)}</span>
+          </div>
+        `;
+      }).join('') : `<div class="text-center py-10 text-slate-400 text-xs">No scheduled bills due this month</div>`;
+
+      // Render Master Recurring Rules
+      document.getElementById('bills-all-list').innerHTML = state.bills.length ? state.bills.map(b => `
+        <div class="bg-white p-3 rounded-xl shadow-xs border border-slate-200 flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold text-slate-800">${b.name}</p>
+            <p class="text-[10px] text-slate-400">${freqTag[b.freq]} • Starts ${b.startPeriod}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-700">${fmt(b.amount)}</span>
+            <button onclick="delBill(${b.id})" class="text-slate-300 hover:text-rose-500 p-1"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+          </div>
+        </div>
+      `).join('') : `<div class="text-center py-10 text-slate-400 text-xs">No auto-recurring rules created</div>`;
+
+      // Render RD Sinking Funds
+      document.getElementById('rd-cards-list').innerHTML = state.rds.length ? state.rds.map(r => {
+        const saved = Object.values(r.deposits).reduce((a, b) => a + b, 0);
+        const thisMonthDep = r.deposits[currentPeriod] || 0;
+        const pct = Math.min(100, Math.round((saved / r.target) * 100));
+        const monthsLeft = Math.max(1, monthDiff(currentPeriod, r.duePeriod) + 1);
+        const monthlyInstallment = Math.ceil(Math.max(0, r.target - saved) / monthsLeft);
+
+        return `
+          <div class="bg-white p-3.5 rounded-2xl shadow-xs border border-slate-200 space-y-2.5">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-slate-800">${r.name}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded font-semibold">Due ${r.duePeriod}</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5">${fmt(saved)} / ${fmt(r.target)} (${pct}%)</p>
+              </div>
+              <button onclick="delRD(${r.id})" class="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
+            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div class="bg-indigo-600 h-full transition-all" style="width:${pct}%"></div>
+            </div>
+            <div class="flex justify-between items-center pt-0.5">
+              <span class="text-[10px] text-slate-400">This mo: <b>${fmt(thisMonthDep)}</b></span>
+              <div class="flex gap-1.5">
+                ${!r.settled && saved < r.target ? `
+                  <button onclick="depositRD(${r.id},${monthlyInstallment})" class="bg-indigo-600 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg active:scale-95">
+                    + Save ${fmt(monthlyInstallment)}
+                  </button>
+                ` : ''}
+                ${!r.settled && saved > 0 ? `
+                  <button onclick="settleRD(${r.id})" class="bg-emerald-600 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg active:scale-95">
+                    Pay Bill
+                  </button>
+                ` : ''}
+                ${r.settled ? `<span class="text-[11px] text-emerald-600 font-bold">✓ Paid</span>` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('') : `<div class="text-center py-10 text-slate-400 text-xs">Tap <b>+</b> to start an RD for yearly expenses</div>`;
+
+      if (activeTab === 'charts') renderCharts();
+      lucide.createIcons();
+    }
+
+    // Charts Engine
+    function renderCharts() {
+      const s = getSummary(currentPeriod);
+      const [yr] = currentPeriod.split('-');
+      document.getElementById('year-lbl').textContent = yr;
+
+      // 1. Ratio Chart (Income vs Expenses + Bills + RD)
+      const badge = document.getElementById('ratio-status-badge');
+      if (s.inc === 0 && s.totalOut === 0) {
+        badge.textContent = 'No Data';
+        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500';
+      } else if (s.net < 0) {
+        badge.textContent = 'Over Crossing!';
+        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700';
+      } else {
+        badge.textContent = 'Healthy';
+        badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700';
+      }
+
+      if (ratioChartInst) ratioChartInst.destroy();
+      ratioChartInst = new Chart(document.getElementById('ratioChart'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Expenses', 'Scheduled Bills', 'RD Saved', 'Unspent Net'],
+          datasets: [{
+            data: [s.exp, s.billsAmt, s.rdDep, Math.max(0, s.net)],
+            backgroundColor: ['#f43f5e', '#f59e0b', '#4f46e5', '#10b981'],
+            borderWidth: 0
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+      });
+
+      // 2. Yearly 12-Month Trend
+      if (yearChartInst) yearChartInst.destroy();
+      const mos = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+      const yInc = [], yOut = [], ySav = [];
+      for (let m = 1; m <= 12; m++) {
+        const ym = `${yr}-${String(m).padStart(2, '0')}`;
+        const ms = getSummary(ym);
+        yInc.push(ms.inc);
+        yOut.push(ms.totalOut);
+        ySav.push(ms.rdDep + Math.max(0, ms.net));
+      }
+      yearChartInst = new Chart(document.getElementById('yearChart'), {
+        type: 'bar',
+        data: {
+          labels: mos,
+          datasets: [
+            { label: 'Inc', data: yInc, backgroundColor: '#10b981', borderRadius: 3 },
+            { label: 'Out', data: yOut, backgroundColor: '#f43f5e', borderRadius: 3 },
+            { label: 'Sav', data: ySav, backgroundColor: '#4f46e5', borderRadius: 3 }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }, scales: { x: { ticks: { font: { size: 9 } } }, y: { ticks: { font: { size: 9 } } } } }
+      });
+
+      // 3. Category Chart
+      if (catChartInst) catChartInst.destroy();
+      const catTotals = {};
+      s.expList.forEach(e => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
+      catChartInst = new Chart(document.getElementById('catChart'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(catTotals).length ? Object.keys(catTotals) : ['Empty'],
+          datasets: [{
+            data: Object.keys(catTotals).length ? Object.values(catTotals) : [1],
+            backgroundColor: ['#f43f5e', '#f59e0b', '#8b5cf6', '#06b6d4', '#10b981', '#64748b'],
+            borderWidth: 0
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } }
+      });
+    }
+
+    // Export / Import Backup
+    function exportData() {
+      const a = document.createElement('a');
+      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+      a.download = `fintrack_${currentPeriod}.json`;
+      a.click();
+    }
+
+    function importData(e) {
+      const f = e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = ev => {
+        try { state = JSON.parse(ev.target.result); save(); } catch (err) { alert('Invalid file'); }
+      };
+      r.readAsText(f);
+    }
+
+    render();
+  </script>
+</body>
+</html>
