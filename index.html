@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinTrack - Expense, EMI & Savings Planner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
+
+  <!-- Header & Summary Bar -->
+  <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-10">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center gap-2">
+        <i data-lucide="wallet" class="w-7 h-7 text-emerald-400"></i>
+        <h1 class="text-xl font-bold tracking-tight">FinTrack Planner</h1>
+      </div>
+      <div class="flex gap-3 text-sm">
+        <button onclick="exportData()" class="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+          <i data-lucide="download" class="w-4 h-4"></i> Backup Data
+        </button>
+        <button onclick="clearAllData()" class="flex items-center gap-1 bg-rose-950/60 hover:bg-rose-900 text-rose-200 px-3 py-1.5 rounded-lg border border-rose-800 transition">
+          <i data-lucide="trash-2" class="w-4 h-4"></i> Reset
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 mt-6 space-y-8">
+    
+    <!-- Top KPI Cards -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Daily Expenses (Total)</p>
+          <p id="total-expenses" class="text-2xl font-bold text-slate-900 mt-1">₹0</p>
+        </div>
+        <div class="p-3 bg-rose-50 text-rose-600 rounded-lg">
+          <i data-lucide="receipt" class="w-6 h-6"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Pending Monthly Bills / EMIs</p>
+          <p id="total-pending-emis" class="text-2xl font-bold text-amber-600 mt-1">₹0</p>
+        </div>
+        <div class="p-3 bg-amber-50 text-amber-600 rounded-lg">
+          <i data-lucide="calendar-clock" class="w-6 h-6"></i>
+        </div>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Saved in Recurring Goals</p>
+          <p id="total-savings" class="text-2xl font-bold text-emerald-600 mt-1">₹0</p>
+        </div>
+        <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+          <i data-lucide="piggy-bank" class="w-6 h-6"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main 3-Column Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- 1. DAILY EXPENSES -->
+      <section class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+        <div class="p-5 border-b border-slate-100">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <i data-lucide="shopping-bag" class="w-5 h-5 text-rose-500"></i> Daily Expenses
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Log everyday spending</p>
+        </div>
+        
+        <form id="expense-form" class="p-4 bg-slate-50/50 border-b border-slate-100 space-y-3">
+          <input type="text" id="exp-title" placeholder="Item (e.g., Groceries, Fuel)" required
+            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="exp-amount" placeholder="Amount (₹)" min="1" step="any" required
+              class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+            <select id="exp-category" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white">
+              <option value="Food">Food & Dining</option>
+              <option value="Transport">Transport</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Misc">Misc</option>
+            </select>
+          </div>
+          <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm py-2 rounded-lg transition">
+            + Add Expense
+          </button>
+        </form>
+
+        <div id="expense-list" class="p-4 space-y-2.5 flex-1 overflow-y-auto max-h-96"></div>
+      </section>
+
+      <!-- 2. SCHEDULED BILLS & EMIs -->
+      <section class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+        <div class="p-5 border-b border-slate-100">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <i data-lucide="bell-ring" class="w-5 h-5 text-amber-500"></i> Scheduled Bills & EMIs
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Track monthly fixed commitments</p>
+        </div>
+
+        <form id="emi-form" class="p-4 bg-slate-50/50 border-b border-slate-100 space-y-3">
+          <input type="text" id="emi-name" placeholder="Bill/EMI Name (e.g., Home Loan, Wifi)" required
+            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="emi-amount" placeholder="Amount (₹)" min="1" step="any" required
+              class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+            <input type="number" id="emi-day" placeholder="Due Day (1-31)" min="1" max="31" required
+              class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium text-sm py-2 rounded-lg transition">
+            + Schedule Bill / EMI
+          </button>
+        </form>
+
+        <div id="emi-list" class="p-4 space-y-2.5 flex-1 overflow-y-auto max-h-96"></div>
+      </section>
+
+      <!-- 3. RECURRING SAVINGS & ACCOUNTS -->
+      <section class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+        <div class="p-5 border-b border-slate-100">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <i data-lucide="trending-up" class="w-5 h-5 text-emerald-500"></i> Recurring Savings (RD/SIP)
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Add deposits to recurring accounts</p>
+        </div>
+
+        <form id="savings-form" class="p-4 bg-slate-50/50 border-b border-slate-100 space-y-3">
+          <input type="text" id="sav-name" placeholder="Account (e.g., Emergency Fund, SIP)" required
+            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="sav-monthly" placeholder="Monthly Deposit (₹)" min="1" step="any" required
+              class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+            <input type="number" id="sav-target" placeholder="Target Goal (₹)" min="1" step="any" required
+              class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900">
+          </div>
+          <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm py-2 rounded-lg transition">
+            + Create Recurring Account
+          </button>
+        </form>
+
+        <div id="savings-list" class="p-4 space-y-3 flex-1 overflow-y-auto max-h-96"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    // State Management with LocalStorage
+    let state = JSON.parse(localStorage.getItem('fintrack_data')) || {
+      expenses: [],
+      emis: [],
+      savings: []
+    };
+
+    function saveState() {
+      localStorage.setItem('fintrack_data', JSON.stringify(state));
+      renderAll();
+    }
+
+    function formatINR(num) {
+      return '₹' + Number(num).toLocaleString('en-IN');
+    }
+
+    // 1. Expense Handlers
+    document.getElementById('expense-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('exp-title').value.trim();
+      const amount = parseFloat(document.getElementById('exp-amount').value);
+      const category = document.getElementById('exp-category').value;
+      const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+      state.expenses.unshift({ id: Date.now(), title, amount, category, date });
+      e.target.reset();
+      saveState();
+    });
+
+    function deleteExpense(id) {
+      state.expenses = state.expenses.filter(item => item.id !== id);
+      saveState();
+    }
+
+    // 2. EMI / Bill Handlers
+    document.getElementById('emi-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('emi-name').value.trim();
+      const amount = parseFloat(document.getElementById('emi-amount').value);
+      const dueDay = parseInt(document.getElementById('emi-day').value);
+
+      state.emis.push({ id: Date.now(), name, amount, dueDay, paid: false });
+      state.emis.sort((a, b) => a.dueDay - b.dueDay);
+      e.target.reset();
+      saveState();
+    });
+
+    function toggleEmiPaid(id) {
+      const emi = state.emis.find(item => item.id === id);
+      if (emi) emi.paid = !emi.paid;
+      saveState();
+    }
+
+    function deleteEmi(id) {
+      state.emis = state.emis.filter(item => item.id !== id);
+      saveState();
+    }
+
+    // 3. Recurring Savings Handlers
+    document.getElementById('savings-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('sav-name').value.trim();
+      const monthly = parseFloat(document.getElementById('sav-monthly').value);
+      const target = parseFloat(document.getElementById('sav-target').value);
+
+      state.savings.push({ id: Date.now(), name, monthly, target, saved: 0 });
+      e.target.reset();
+      saveState();
+    });
+
+    function addContribution(id) {
+      const acc = state.savings.find(item => item.id === id);
+      if (acc) {
+        acc.saved += acc.monthly;
+        saveState();
+      }
+    }
+
+    function deleteSavings(id) {
+      state.savings = state.savings.filter(item => item.id !== id);
+      saveState();
+    }
+
+    // Backup & Reset
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+      const a = document.createElement('a');
+      a.href = dataStr;
+      a.download = `fintrack_backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    }
+
+    function clearAllData() {
+      if (confirm('Clear all saved financial records? This cannot be undone.')) {
+        state = { expenses: [], emis: [], savings: [] };
+        saveState();
+      }
+    }
+
+    // Render UI
+    function renderAll() {
+      // KPIs
+      const totalExp = state.expenses.reduce((sum, x) => sum + x.amount, 0);
+      const pendingEmis = state.emis.filter(x => !x.paid).reduce((sum, x) => sum + x.amount, 0);
+      const totalSav = state.savings.reduce((sum, x) => sum + x.saved, 0);
+
+      document.getElementById('total-expenses').textContent = formatINR(totalExp);
+      document.getElementById('total-pending-emis').textContent = formatINR(pendingEmis);
+      document.getElementById('total-savings').textContent = formatINR(totalSav);
+
+      // Render Expenses
+      const expEl = document.getElementById('expense-list');
+      expEl.innerHTML = state.expenses.length ? state.expenses.map(item => `
+        <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200/80">
+          <div>
+            <p class="font-medium text-sm text-slate-900">${item.title}</p>
+            <p class="text-xs text-slate-500">${item.category} • ${item.date}</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="font-semibold text-sm text-rose-600">${formatINR(item.amount)}</span>
+            <button onclick="deleteExpense(${item.id})" class="text-slate-400 hover:text-rose-600 text-xs">✕</button>
+          </div>
+        </div>
+      `).join('') : `<p class="text-center text-xs text-slate-400 py-6">No daily expenses logged yet.</p>`;
+
+      // Render EMIs
+      const emiEl = document.getElementById('emi-list');
+      emiEl.innerHTML = state.emis.length ? state.emis.map(item => `
+        <div class="flex items-center justify-between p-3 rounded-lg border ${item.paid ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200/80'}">
+          <div class="flex items-center gap-2.5">
+            <input type="checkbox" ${item.paid ? 'checked' : ''} onchange="toggleEmiPaid(${item.id})"
+              class="w-4 h-4 accent-emerald-600 rounded cursor-pointer">
+            <div>
+              <p class="font-medium text-sm ${item.paid ? 'line-through text-slate-400' : 'text-slate-900'}">${item.name}</p>
+              <p class="text-xs text-slate-500">Due: Day ${item.dueDay} of month</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="font-semibold text-sm ${item.paid ? 'text-emerald-600' : 'text-amber-600'}">${formatINR(item.amount)}</span>
+            <button onclick="deleteEmi(${item.id})" class="text-slate-400 hover:text-rose-600 text-xs">✕</button>
+          </div>
+        </div>
+      `).join('') : `<p class="text-center text-xs text-slate-400 py-6">No scheduled bills or EMIs yet.</p>`;
+
+      // Render Savings
+      const savEl = document.getElementById('savings-list');
+      savEl.innerHTML = state.savings.length ? state.savings.map(item => {
+        const pct = Math.min(100, Math.round((item.saved / item.target) * 100));
+        return `
+          <div class="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-semibold text-sm text-slate-900">${item.name}</p>
+                <p class="text-xs text-slate-500">${formatINR(item.saved)} / ${formatINR(item.target)} (${pct}%)</p>
+              </div>
+              <button onclick="deleteSavings(${item.id})" class="text-slate-400 hover:text-rose-600 text-xs">✕</button>
+            </div>
+            <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+              <div class="bg-emerald-500 h-full transition-all" style="width: ${pct}%"></div>
+            </div>
+            <div class="flex justify-between items-center pt-1">
+              <span class="text-xs text-slate-500">Installment: ${formatINR(item.monthly)}</span>
+              <button onclick="addContribution(${item.id})"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-2.5 py-1 rounded transition">
+                + Deposit ${formatINR(item.monthly)}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('') : `<p class="text-center text-xs text-slate-400 py-6">No recurring savings accounts set up.</p>`;
+
+      lucide.createIcons();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
